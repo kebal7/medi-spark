@@ -79,8 +79,10 @@
 
             const result = await response.json();
             document.getElementById("result").innerText = 
-                "Prediction: " + result.prediction + 
-                " (Probability of disease: " + (result.probability * 100).toFixed(1) + "%)";
+              "Prediction: " + result.prediction + 
+              " (" + result.risk_level + " Risk)\n" +
+              "Probability of Heart Disease: " + result.probability_disease + "%\n" +
+              "Probability of No Heart Disease: " + result.probability_no_disease + "%";
         };
 
         // Random fill button

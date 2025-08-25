@@ -85,8 +85,12 @@ def predict(new_data: dict):
     df = spark.createDataFrame([new_data])
 
     # Predict
-    preds = lr_model.transform(df)
-    preds.select("prediction", "probability").show(truncate=False)
+    preds = lr_model.transform(df).select("prediction", "probability").collect()[0]
+
+    prediction = int(preds["prediction"])
+    probability = preds["probability"].toArray().tolist()  # [prob_no_disease, prob_disease]
+
+    return prediction, probability[1]  # return class and probability of disease
 
 # -----------------------
 # Prediction endpoint
@@ -94,6 +98,24 @@ def predict(new_data: dict):
 @app.post("/predict")
 async def predict_endpoint(data: PatientData):
     features_dict = transform_to_one_hot(data)
-    predict(features_dict)
-    return {"message": "Prediction done! Check console for output."}
+    prediction, disease_prob = predict(features_dict)
 
+    # Human-readable prediction
+    prediction_text = "Heart Disease" if prediction == 1 else "No Heart Disease"
+
+    # Risk levels based on probability of disease
+    if disease_prob < 0.3:
+        risk_level = "Low"
+    elif disease_prob < 0.7:
+        risk_level = "Medium"
+    else:
+        risk_level = "High"
+
+    no_disease_prob = 1 - disease_prob  # probability of no disease
+
+    return {
+        "prediction": prediction_text,
+        "probability_disease": round(disease_prob * 100, 1),    # % chance of heart disease
+        "probability_no_disease": round(no_disease_prob * 100, 1),  # % chance of no heart disease
+        "risk_level": risk_level
+    }
