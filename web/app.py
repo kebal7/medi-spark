@@ -73,13 +73,14 @@ def transform_to_one_hot(data: PatientData):
 # -----------------------
 # Prediction function
 # -----------------------
-def predict(new_data: dict):
-    spark = create_spark_session()
+spark = create_spark_session()
 
-    # Path to your saved pipeline
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    model_dir = os.path.join(script_dir, "..", "models")
-    lr_model = PipelineModel.load(os.path.join(model_dir, "lr_pipeline"))
+# Path to your saved pipeline
+script_dir = os.path.dirname(os.path.abspath(__file__))
+model_dir = os.path.join(script_dir, "..", "models")
+lr_model = PipelineModel.load(os.path.join(model_dir, "lr_pipeline"))
+    
+def predict(new_data: dict):
 
     # Turn dict into Spark DataFrame
     df = spark.createDataFrame([new_data])
@@ -97,8 +98,19 @@ def predict(new_data: dict):
 # -----------------------
 @app.post("/predict")
 async def predict_endpoint(data: PatientData):
+    
+    # clamp max HR
+    max_hr_limit = 220 - data.age
+    data.thalach = min(data.thalach, max_hr_limit)
+    
     features_dict = transform_to_one_hot(data)
     prediction, disease_prob = predict(features_dict)
+
+    # ---------------- Safety wrapper ----------------
+    # Force high risk for obvious high-risk patients
+    if (data.age > 70) or (data.oldpeak > 3) or (data.ca >= 2):
+        prediction = 1
+        disease_prob = max(disease_prob, 0.95)  # Force probability high
 
     # Human-readable prediction
     prediction_text = "Heart Disease" if prediction == 1 else "No Heart Disease"
